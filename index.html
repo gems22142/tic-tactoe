@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Крестики-нолики PRO</title>
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(#111, #000);
+      font-family: "Segoe UI", sans-serif;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      margin: 10px 0;
+      font-size: 2em;
+      text-shadow: 0 0 10px #0f0;
+    }
+    #menu-area {
+      margin-bottom: 10px;
+    }
+    .difficulty-buttons {
+      margin: 10px 0;
+    }
+    .difficulty-buttons button {
+      margin: 0 8px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      background: #0f0;
+      color: #000;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: 0 0 8px #0f0;
+      transition: background 0.3s, color 0.3s;
+    }
+    .difficulty-buttons button.active {
+      background: #090;
+      color: #fff;
+      cursor: default;
+      box-shadow: 0 0 15px #0f0;
+    }
+    .difficulty-buttons button:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 150px);
+      gap: 15px;
+      justify-content: center;
+      margin-top: 40px;
+    }
+    .cell {
+      width: 150px;
+      height: 150px;
+      background: #222;
+      color: #0f0;
+      font-size: 4em;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      box-shadow: 0 0 20px #0f08;
+      user-select: none;
+    }
+    .cell:hover {
+      background: #333;
+    }
+    .cell.winner {
+      background: #0f0;
+      color: #000;
+      font-weight: 700;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 1.4em;
+      text-shadow: 0 0 5px #fff;
+    }
+    #restart {
+      margin: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      background: #0f0;
+      color: #000;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: 0 0 8px #0f0;
+    }
+    #restart:hover {
+      background: #090;
+      color: #fff;
+    }
+    #overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+      display: none;
+    }
+    #popup {
+      background: #111;
+      padding: 30px 40px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 0 20px #0f0;
+      color: #0f0;
+      font-size: 1.8em;
+      user-select: none;
+    }
+    #popup-buttons {
+      margin-top: 25px;
+    }
+    #popup-buttons button {
+      margin: 0 15px;
+      padding: 12px 25px;
+      font-size: 1em;
+      border-radius: 10px;
+      border: none;
+      background: #0f0;
+      color: #000;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: 0 0 10px #0f0;
+      transition: background 0.3s, color 0.3s;
+    }
+    #popup-buttons button:hover {
+      background: #090;
+      color: #fff;
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+<h1>Крестики-нолики PRO</h1>
+
+<div id="menu-area">
+  <div class="difficulty-buttons">
+    <button id="btn-easy" data-level="easy" class="active">Лёгкая</button>
+    <button id="btn-normal" data-level="normal">Нормальная</button>
+    <button id="btn-hard" data-level="hard">Сложная</button>
+    <button id="btn-extreme" data-level="extreme">Экстрим</button>
+  </div>
+  <button id="restart">Заново</button>
+</div>
+
+<div class="board" id="board"></div>
+<div id="status">Ход: X (Ты)</div>
+
+<div id="overlay">
+  <div id="popup">
+    <div id="popup-message"></div>
+    <div id="popup-buttons">
+      <button id="btn-exit">Выйти</button>
+      <button id="btn-restart">Играть ещё раз</button>
+    </div>
+  </div>
+</div>
+
+<audio id="sound-write-x" src="write_x.mp3"></audio>
+<audio id="sound-write-o" src="write_o.mp3"></audio>
+<audio id="sound-win" src="pobeda.mp3"></audio>
+<audio id="sound-lose" src="proigral.mp3"></audio>
+<audio id="sound-tap" src="tap.mp3"></audio>
+<audio id="sound-draw" src="nichya.mp3"></audio>
+
+<script>
+const boardEl = document.getElementById("board"),
+  statusEl = document.getElementById("status"),
+  menuArea = document.getElementById("menu-area"),
+  difficultyButtons = document.querySelectorAll(".difficulty-buttons button"),
+  restartBtn = document.getElementById("restart"),
+  overlay = document.getElementById("overlay"),
+  popupMessage = document.getElementById("popup-message"),
+  btnExit = document.getElementById("btn-exit"),
+  btnRestart = document.getElementById("btn-restart"),
+  sounds = {
+    writeX: document.getElementById("sound-write-x"),
+    writeO: document.getElementById("sound-write-o"),
+    win: document.getElementById("sound-win"),
+    lose: document.getElementById("sound-lose"),
+    tap: document.getElementById("sound-tap"),
+    draw: document.getElementById("sound-draw")
+  };
+
+let board = Array(9).fill(""),
+  currentPlayer = "X",
+  gameActive = true,
+  difficulty = "easy",
+  playerCanMove = true,
+  winCombos = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+
+function drawBoard() {
+  boardEl.innerHTML = "";
+  board.forEach((e,i) => {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.textContent = e;
+    cell.onclick = () => {
+      if (!gameActive || board[i] || currentPlayer !== "X" || !playerCanMove) return;
+      board[i] = "X";
+      drawBoard();
+      playSound(sounds.writeX);
+      if (!checkWinner("X")) {
+        currentPlayer = "O";
+        playerCanMove = false;
+        statusEl.textContent = "Ход: O (Компьютер)";
+        setTimeout(() => {
+          botMove();
+          if (!checkWinner("O")) {
+            setTimeout(() => {
+              currentPlayer = "X";
+              playerCanMove = true;
+              statusEl.textContent = "Ход: X (Ты)";
+            }, 1000);
+          }
+        }, 2000);
+      }
+    };
+    boardEl.appendChild(cell);
+  });
+}
+
+function playSound(sound) {
+  sound.pause();
+  sound.currentTime = 0;
+  sound.play();
+}
+
+function botMove() {
+  if (!gameActive) return;
+  const emptyIndices = board.map((v,i) => v === "" ? i : null).filter(i => i !== null);
+  let move;
+  if (difficulty === "easy") move = emptyIndices[Math.floor(Math.random()*emptyIndices.length)];
+  else if (difficulty === "normal") move = Math.random() < 0.5 ? smartMove() : emptyIndices[Math.floor(Math.random()*emptyIndices.length)];
+  else if (difficulty === "hard") move = Math.random() < 0.8 ? smartMove() : emptyIndices[Math.floor(Math.random()*emptyIndices.length)];
+  else move = minimax(board.slice(), "O").index;
+  if (move !== undefined) {
+    board[move] = "O";
+    drawBoard();
+    playSound(sounds.writeO);
+  }
+}
+
+function smartMove() {
+  for (let combo of winCombos) {
+    const cells = combo.map(i => board[i]);
+    if (cells.filter(c => c === "O").length === 2 && cells.includes("")) return combo[cells.indexOf("")];
+  }
+  for (let combo of winCombos) {
+    const cells = combo.map(i => board[i]);
+    if (cells.filter(c => c === "X").length === 2 && cells.includes("")) return combo[cells.indexOf("")];
+  }
+  return randomMove();
+}
+
+function randomMove() {
+  const emptyIndices = board.map((v,i) => v === "" ? i : null).filter(i => i !== null);
+  return emptyIndices[Math.floor(Math.random()*emptyIndices.length)];
+}
+
+function checkWinner(player) {
+  for (let combo of winCombos) {
+    if (combo.every(i => board[i] === player)) {
+      gameActive = false;
+      combo.forEach(i => boardEl.children[i].classList.add("winner"));
+      setTimeout(() => {
+        statusEl.textContent = player === "X" ? "Ты победил!" : "Компьютер победил!";
+        showPopup(player === "X" ? "Ты выиграл!" : "Ты проиграл!", player === "X" ? sounds.win : sounds.lose);
+      }, 1500);
+      return true;
+    }
+  }
+  if (!board.includes("")) {
+    gameActive = false;
+    setTimeout(() => {
+      statusEl.textContent = "Ничья!";
+      showPopup("Ничья!", sounds.draw);
+    }, 1500);
+    return true;
+  }
+  return false;
+}
+
+function restartGame() {
+  board.fill("");
+  currentPlayer = "X";
+  gameActive = true;
+  playerCanMove = true;
+  statusEl.textContent = "Ход: X (Ты)";
+  drawBoard();
+  hidePopup();
+  menuArea.classList.remove("hidden");
+}
+
+function showPopup(message, sound) {
+  popupMessage.textContent = message;
+  overlay.style.display = "flex";
+  if (sound) playSound(sound);
+  menuArea.classList.add("hidden");
+}
+
+function hidePopup() {
+  overlay.style.display = "none";
+}
+
+difficultyButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    difficultyButtons.forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    difficulty = btn.getAttribute("data-level");
+    restartGame();
+  });
+});
+
+restartBtn.onclick = restartGame;
+
+btnExit.onclick = () => {
+  window.location.href = "https://www.google.com";
+};
+
+btnRestart.onclick = () => {
+  hidePopup();
+  restartGame();
+};
+
+document.querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => playSound(sounds.tap));
+});
+
+drawBoard();
+
+function minimax(newBoard, player) {
+  const availSpots = newBoard.map((v,i) => v === "" ? i : null).filter(i => i !== null);
+  if (checkWin(newBoard, "X")) return {score: -10};
+  else if (checkWin(newBoard, "O")) return {score: 10};
+  else if (availSpots.length === 0) return {score: 0};
+
+  let moves = [];
+  for (let i=0; i<availSpots.length; i++) {
+    let move = {};
+    move.index = availSpots[i];
+    newBoard[availSpots[i]] = player;
+    move.score = (player === "O") ? minimax(newBoard, "X").score : minimax(newBoard, "O").score;
+    newBoard[availSpots[i]] = "";
+    moves.push(move);
+  }
+  let bestMove;
+  if (player === "O") {
+    let bestScore = -Infinity;
+    for (let i=0; i<moves.length; i++) {
+      if (moves[i].score > bestScore) {
+        bestScore = moves[i].score;
+        bestMove = i;
+      }
+    }
+  } else {
+    let bestScore = Infinity;
+    for (let i=0; i<moves.length; i++) {
+      if (moves[i].score < bestScore) {
+        bestScore = moves[i].score;
+        bestMove = i;
+      }
+    }
+  }
+  return moves[bestMove];
+}
+
+function checkWin(board, player) {
+  return winCombos.some(combo => combo.every(i => board[i] === player));
+}
+</script>
+</body>
+</html>
